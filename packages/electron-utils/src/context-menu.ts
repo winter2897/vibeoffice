@@ -34,6 +34,7 @@ const LABELS: Record<string, ContextMenuLabels> = {
   ms: { cut: 'Potong', copy: 'Salin', paste: 'Tampal', selectAll: 'Pilih Semua' },
   he: { cut: 'גזור', copy: 'העתק', paste: 'הדבק', selectAll: 'בחר הכול' },
   hi: { cut: 'काटें', copy: 'कॉपी करें', paste: 'चिपकाएँ', selectAll: 'सभी चुनें' },
+  vi: { cut: 'Cắt', copy: 'Sao chép', paste: 'Dán', selectAll: 'Chọn tất cả' },
   'zh-TW': { cut: '剪下', copy: '複製', paste: '貼上', selectAll: '全選' },
 }
 

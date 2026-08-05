@@ -161,6 +161,13 @@ const tUpd = createI18n({
     updInstall: 'पुनरारंभ करें और इंस्टॉल करें',
     updLater: 'बाद में याद दिलाएँ',
   },
+  vi: {
+    updTitle: 'Cập nhật phần mềm',
+    updHeadline: 'Đã có phiên bản mới',
+    updDesc: 'Bản cập nhật này gồm cải thiện hiệu năng và sửa lỗi. Nên cập nhật ngay.',
+    updInstall: 'Khởi động lại & cài đặt',
+    updLater: 'Nhắc lại sau',
+  },
   'zh-TW': {
     updTitle: '軟體更新',
     updHeadline: '發現新版本',

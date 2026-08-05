@@ -1,10 +1,10 @@
 /**
  * Univer UI locale wiring. createUniver boots with en-US (the packs
  * are needed synchronously); once the runtime exists, the app language picks
- * the matching Univer language packs — every preset ships all 19 — and
+ * the matching Univer language packs — every preset ships the same 13 — and
  * switches LocaleService, which re-renders the whole Univer React tree
  * (rule-management panels, dialogs, menus). Languages Univer has no pack for
- * (th/nl/ms/he/hi) stay English.
+ * (th/nl/ms/he/hi/vi) stay English.
  */
 import { LocaleService, LocaleType, mergeLocales, type ILocales } from '@univerjs/core'
 

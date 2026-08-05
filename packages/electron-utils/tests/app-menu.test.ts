@@ -27,6 +27,7 @@ const LANGS = [
   'ms',
   'he',
   'hi',
+  'vi',
   'zh-TW',
 ] as const
 
@@ -36,7 +37,7 @@ type Item = { role?: string; type?: string; label?: string; accelerator?: string
 const submenuOf = (tpl: { submenu?: unknown }): Item[] => tpl.submenu as Item[]
 
 describe('appMenuLabels', () => {
-  it('covers all 19 languages with every key non-empty', () => {
+  it('covers all 20 languages with every key non-empty', () => {
     const keys = Object.keys(en) as (keyof AppMenuLabels)[]
     for (const lang of LANGS) {
       const labels = appMenuLabels(lang)

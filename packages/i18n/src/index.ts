@@ -17,6 +17,7 @@ export type Lang =
   | 'ms'
   | 'he'
   | 'hi'
+  | 'vi'
   | 'zh-TW'
 
 export const LANGS: readonly Lang[] = [
@@ -38,6 +39,7 @@ export const LANGS: readonly Lang[] = [
   'ms',
   'he',
   'hi',
+  'vi',
   'zh-TW',
 ]
 
@@ -80,6 +82,7 @@ const HTML_LANGS: Record<Lang, string> = {
   ms: 'ms-MY',
   he: 'he-IL',
   hi: 'hi-IN',
+  vi: 'vi-VN',
   'zh-TW': 'zh-TW',
 }
 

@@ -90,6 +90,7 @@ describe('contextMenuLabels', () => {
   it('covers every language and falls back to English', () => {
     expect(contextMenuLabels('zh').copy).toBe('复制')
     expect(contextMenuLabels('zh-TW').paste).toBe('貼上')
+    expect(contextMenuLabels('vi').selectAll).toBe('Chọn tất cả')
     expect(contextMenuLabels('xx')).toEqual(contextMenuLabels('en'))
   })
 })

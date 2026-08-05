@@ -239,6 +239,17 @@ const tUpd = createI18n({
     updFailed: 'डाउनलोड विफल रहा। अपना नेटवर्क जाँचें और पुनः प्रयास करें।',
     updRetry: 'पुनः प्रयास करें',
   },
+  vi: {
+    updTitle: 'Cập nhật phần mềm',
+    updHeadline: 'Có phiên bản mới',
+    updDesc: 'Bản cập nhật này cải thiện hiệu năng và sửa lỗi. Bạn nên cập nhật ngay.',
+    updDownload: 'Cập nhật ngay',
+    updLater: 'Nhắc lại sau',
+    updInstall: 'Khởi động lại & cài đặt',
+    updDownloading: 'Đang tải bản cập nhật…',
+    updFailed: 'Tải bản cập nhật không thành công. Kiểm tra mạng và thử lại.',
+    updRetry: 'Thử lại',
+  },
   'zh-TW': {
     updTitle: '軟體更新',
     updHeadline: '發現新版本',

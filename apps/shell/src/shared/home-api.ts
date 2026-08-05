@@ -18,6 +18,7 @@ export type UiLanguage =
   | 'ms'
   | 'he'
   | 'hi'
+  | 'vi'
   | 'zh-TW'
 
 /** a recent file entry shown on the home screen; type derives from the extension */

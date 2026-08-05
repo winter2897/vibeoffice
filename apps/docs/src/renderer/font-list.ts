@@ -19,6 +19,25 @@ const LATIN = [
   'Courier New',
   'Impact',
 ]
+// Vietnamese needs Latin Extended Additional (U+1EA0–U+1EF9) coverage, which not
+// every font in LATIN has — Garamond and Impact drop the stacked tone marks on
+// common Windows/macOS builds, so they are excluded here rather than reordered.
+// Times New Roman leads because Vietnamese official documents mandate it
+// (Thông tư 01/2011/TT-BNV, Unicode TCVN 6909:2001).
+// Legacy .VnTime / VNI-Times / TCVN3 fonts are deliberately absent: they are
+// 8-bit encodings, not Unicode, and would corrupt round-tripped text.
+const VIETNAMESE = [
+  'Times New Roman',
+  'Arial',
+  'Calibri',
+  'Tahoma',
+  'Cambria',
+  'Verdana',
+  'Segoe UI',
+  'Georgia',
+  'Trebuchet MS',
+  'Courier New',
+]
 // GB/T 9704 official-document fonts included so government documents can be
 // authored from scratch (values are free-typed either way; the combobox accepts any name)
 const SIMPLIFIED_CHINESE = [
@@ -46,6 +65,8 @@ export function fontFamiliesFor(lang: Lang): readonly string[] {
       return [...JAPANESE, ...LATIN, ...SIMPLIFIED_CHINESE, ...KOREAN, ...TRADITIONAL_CHINESE]
     case 'ko':
       return [...KOREAN, ...LATIN, ...JAPANESE, ...SIMPLIFIED_CHINESE, ...TRADITIONAL_CHINESE]
+    case 'vi':
+      return [...VIETNAMESE, ...JAPANESE, ...SIMPLIFIED_CHINESE, ...KOREAN, ...TRADITIONAL_CHINESE]
     default:
       return [...LATIN, ...JAPANESE, ...SIMPLIFIED_CHINESE, ...KOREAN, ...TRADITIONAL_CHINESE]
   }

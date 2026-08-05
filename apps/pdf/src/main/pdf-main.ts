@@ -222,6 +222,17 @@ const tDlg = createI18n({
     btnDontSave: 'न सहेजें',
     btnCancel: 'रद्द करें',
   },
+  vi: {
+    dlgExportImages: 'Xuất hình ảnh ra thư mục',
+    dlgExtract: 'Trích trang thành PDF',
+    dlgInsert: 'Chọn PDF cần chèn',
+    filterPdf: 'Tài liệu PDF',
+    closeUnsavedMsg: 'PDF này có thay đổi chưa lưu.',
+    closeUnsavedDetail: 'Bạn có muốn lưu trước khi đóng không?',
+    btnSave: 'Lưu',
+    btnDontSave: 'Không lưu',
+    btnCancel: 'Hủy',
+  },
   'zh-TW': {
     dlgExportImages: '匯出圖片到資料夾',
     dlgExtract: '擷取頁面為 PDF',

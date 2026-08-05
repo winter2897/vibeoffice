@@ -35,6 +35,7 @@ const UI_LANGUAGES: readonly UiLanguage[] = [
   'ms',
   'he',
   'hi',
+  'vi',
   'zh-TW',
 ]
 
