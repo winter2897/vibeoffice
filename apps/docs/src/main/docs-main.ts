@@ -10,16 +10,21 @@ import {
 } from 'node:fs'
 import { copyFile, mkdir, readFile, readdir, stat, unlink } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import { BrowserWindow, Menu, WebContentsView, app, dialog, ipcMain, shell } from 'electron'
+import { BrowserWindow, Menu, WebContentsView, app, dialog, ipcMain, net, shell } from 'electron'
 import {
   appMenuLabels,
+  configuredDefaultSaveDir,
   contextMenuLabels,
-  fetchWithSsrfGuard,
+  fetchRemoteImage,
   installContextMenu,
   installNavigationGuard,
   safeExternalUrl,
+  showOpenDialogWithMemory,
+  showSaveDialogWithMemory,
+  toggleDevToolsItem,
   windowMenuTemplate,
 } from '@genoffice/electron-utils'
+import { configureMetricsCache, familyVerticalMetrics } from '@genoffice/font-metrics'
 import { createI18n, getUiLang, normalizeLang, setUiLang } from '@genoffice/i18n'
 import { ProjectStore } from '@genoffice/project-store'
 import type {
@@ -36,6 +41,7 @@ import {
   chatForProvider,
   defaultAiSettings,
   resolveAiSettings,
+  setRescueFetch,
   streamForProvider,
   type AiChatRequest,
   type AiSettings,
@@ -45,8 +51,8 @@ import {
   type LegacyAiSettings,
 } from '@genoffice/ai-provider'
 import {
+  ensureGenofficeLogin,
   gskApiKey,
-  gskLogin,
   gskLoginInfo,
   hasGskAuth,
   webSearch,
@@ -2032,20 +2038,18 @@ function dialogParent(event: IpcMainInvokeEvent): BrowserWindow | undefined {
 }
 
 async function openDialog(event: IpcMainInvokeEvent, options: OpenDialogOptions) {
-  const parent = dialogParent(event)
-  return parent ? dialog.showOpenDialog(parent, options) : dialog.showOpenDialog(options)
+  return showOpenDialogWithMemory(dialog, dialogParent(event), options)
 }
 
 async function saveDialog(event: IpcMainInvokeEvent, options: SaveDialogOptions) {
-  const parent = dialogParent(event)
-  return parent ? dialog.showSaveDialog(parent, options) : dialog.showSaveDialog(options)
+  // before any pick is remembered, bare-name suggestions anchor in the
+  // configurable default save folder instead of Electron's Downloads pin
+  return showSaveDialogWithMemory(dialog, dialogParent(event), options, defaultSaveDir())
 }
 
-/** default folder where new files land on their first (silent) save; shared with the other editors via shell */
+/** default folder where new files land on their first (silent) save; shared with the other editors via shell. User-configurable (app-settings.json), falls back to <Documents>/GenOffice. */
 export function defaultSaveDir(): string {
-  const dir = join(app.getPath('documents'), 'GenOffice')
-  mkdirSync(dir, { recursive: true })
-  return dir
+  return configuredDefaultSaveDir(app)
 }
 
 /** first free path for fileName inside dir: name.ext, name-2.ext, name-3.ext… */
@@ -2248,7 +2252,13 @@ function allowPdfWrite(wcId: number, filePath: string): void {
   pdfWritablePaths.set(wcId, set)
 }
 
+// Fidelity-harness escape hatch: headless runs have no save dialog to authorize
+// paths, so an explicitly configured directory (set only by our test scripts)
+// is treated as pre-authorized for PDF export.
+const testExportDir = process.env.GENOFFICE_TEST_EXPORT_DIR || null
+
 function canPdfWrite(wcId: number, filePath: string): boolean {
+  if (testExportDir && filePath.startsWith(testExportDir + '/')) return true
   return pdfWritablePaths.get(wcId)?.has(filePath) === true
 }
 
@@ -2588,7 +2598,7 @@ export function registerAiIpc(): void {
   )
 
   ipcMain.handle('ai:gsk-login', () => {
-    gskLogin()
+    ensureGenofficeLogin((url) => void shell.openExternal(url))
   })
 
   ipcMain.handle('ai:set-settings', (_event, settings: AiSettings) => {
@@ -2689,10 +2699,9 @@ export function registerAiIpc(): void {
       try {
         // the URL originates from AI tool calls (prompt-injectable via web search
         // results), so refuse non-http schemes and private/link-local targets;
-        // redirects are followed manually so every hop is validated too
-        const resp = await fetchWithSsrfGuard(String(url), {
-          headers: { 'User-Agent': 'Mozilla/5.0' },
-        })
+        // redirects are followed manually so every hop is validated too.
+        // fetchRemoteImage adds CDN-friendly headers and transient-error retries.
+        const resp = await fetchRemoteImage(String(url))
         if (!resp || !resp.ok) return null
         const buf = Buffer.from(await resp.arrayBuffer())
         const ct = resp.headers.get('content-type') ?? ''
@@ -2921,9 +2930,17 @@ export function registerProjectIpc(): void {
 
 /** document/attachment/window IPC (everything except the AI proxy above) */
 export function registerDocsIpc(): void {
+  // Node fetch (undici) direct connections get reset under VPN/tun setups; retry over Chromium's stack
+  setRescueFetch((url, init) => net.fetch(url, init))
+
   // shared with the other editor modules — last (identical) registration wins
   ipcMain.removeHandler('app:get-language')
   ipcMain.handle('app:get-language', () => getUiLang())
+
+  configureMetricsCache(userDataPath('font-metrics'))
+  ipcMain.handle('docs:font-metrics', (_event, family: string) =>
+    typeof family === 'string' ? familyVerticalMetrics(family) : null,
+  )
 
   ipcMain.handle('docs:open', async (event) => {
     const result = await openDialog(event, {
@@ -3333,6 +3350,26 @@ function sendCommand(command: MenuCommand, payload?: string): void {
   activeDocsWebContents()?.send('menu:command', command, payload)
 }
 
+/**
+ * Per-tab View-menu toggle state (AI Sidebar / Dark Mode), reported by each
+ * renderer whenever it changes. The template can't hardcode `checked` — the
+ * state lives in the renderer and differs per tab — so builds read the active
+ * tab's last report, and reports from the active tab patch the built menu in
+ * place (buildDocsMenu also re-runs on every tab focus switch).
+ * Defaults mirror the renderer's initial state: sidebar shown, light canvas.
+ */
+const viewMenuStateByWebContents = new Map<number, { aiSidebar: boolean; darkCanvas: boolean }>()
+
+function activeViewMenuState(): { aiSidebar: boolean; darkCanvas: boolean } {
+  const id = activeDocsWebContents()?.id
+  return (
+    (id !== undefined ? viewMenuStateByWebContents.get(id) : undefined) ?? {
+      aiSidebar: true,
+      darkCanvas: false,
+    }
+  )
+}
+
 /** shell-injected items appended to the File menu (e.g. Back to Home); persists
  * across the internal rebuilds pushRecent() triggers */
 let extraFileMenuItems: MenuItemConstructorOptions[] = []
@@ -3473,11 +3510,23 @@ export function buildDocsMenu(): void {
         { label: tm('menuPageWidth'), click: () => sendCommand('zoom-page-width') },
         { label: tm('menuWholePage'), click: () => sendCommand('zoom-whole-page') },
         { type: 'separator' },
-        { label: tm('menuAiSidebar'), click: () => sendCommand('toggle-ai') },
-        { label: tm('menuDarkMode'), click: () => sendCommand('toggle-dark') },
+        {
+          id: 'docs-menu-ai-sidebar',
+          type: 'checkbox',
+          checked: activeViewMenuState().aiSidebar,
+          label: tm('menuAiSidebar'),
+          click: () => sendCommand('toggle-ai'),
+        },
+        {
+          id: 'docs-menu-dark-mode',
+          type: 'checkbox',
+          checked: activeViewMenuState().darkCanvas,
+          label: tm('menuDarkMode'),
+          click: () => sendCommand('toggle-dark'),
+        },
         { type: 'separator' },
         { role: 'togglefullscreen', label: tm('menuFullscreen') },
-        ...(isDev ? [{ role: 'toggleDevTools' as const }] : []),
+        ...(isDev ? [toggleDevToolsItem(appMenuLabels(getUiLang()))] : []),
       ],
     },
     {
@@ -3639,6 +3688,24 @@ interface DocsCloseState {
 }
 const closeCheckWaiters = new Map<number, (state: DocsCloseState) => void>()
 const closeSaveWaiters = new Map<number, (ok: boolean) => void>()
+
+ipcMain.on('docs:view-menu-state', (event, state: unknown) => {
+  const s = state as { aiSidebar?: unknown; darkCanvas?: unknown } | null
+  const next = { aiSidebar: s?.aiSidebar === true, darkCanvas: s?.darkCanvas === true }
+  if (!viewMenuStateByWebContents.has(event.sender.id)) {
+    const id = event.sender.id
+    event.sender.once('destroyed', () => viewMenuStateByWebContents.delete(id))
+  }
+  viewMenuStateByWebContents.set(event.sender.id, next)
+  // patch the live menu only for the active tab; an inactive tab's state gets
+  // picked up by the buildDocsMenu run its next focus triggers
+  if (event.sender.id !== activeDocsWebContents()?.id) return
+  const menu = Menu.getApplicationMenu()
+  const ai = menu?.getMenuItemById('docs-menu-ai-sidebar')
+  if (ai) ai.checked = next.aiSidebar
+  const dark = menu?.getMenuItemById('docs-menu-dark-mode')
+  if (dark) dark.checked = next.darkCanvas
+})
 
 ipcMain.on('docs:close-check-result', (event, state: unknown) => {
   const waiter = closeCheckWaiters.get(event.sender.id)

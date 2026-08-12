@@ -8,8 +8,11 @@ import {
   installContextMenu,
   installNavigationGuard,
   safeExternalUrl,
+  showOpenDialogWithMemory,
+  showSaveDialogWithMemory,
 } from '@genoffice/electron-utils'
 import { createI18n, getUiLang } from '@genoffice/i18n'
+import { gskGenerateImage, hasGskAuth } from '@genoffice/ai-search'
 import { PDF_CHANNELS } from '../shared/ipc'
 import type {
   ExportImagesRequest,
@@ -18,10 +21,13 @@ import type {
   ExtractPagesResult,
   InsertPdfRequest,
   InsertPdfResult,
+  PagePreviewRequest,
   SavePdfRequest,
   SavePdfResult,
+  TextEditValidation,
+  ValidateTextEditsRequest,
 } from '../shared/ipc'
-import { extractPagesBytes, insertPdfBytes, savePdfToPath } from './save-pdf'
+import { extractPagesBytes, insertPdfBytes, readStaticFormFills, savePdfToPath } from './save-pdf'
 
 const tDlg = createI18n({
   zh: {
@@ -269,8 +275,11 @@ export function configurePdfRuntime(paths: RuntimePaths): void {
   runtime = paths
 }
 
-/** Open paths queued at tab creation; the renderer consumes them after mount (avoids did-finish-load races) */
-const pendingByWc = new Map<number, string>()
+/** Open path per view, queued at tab creation; the renderer consumes it after mount
+ * (avoids did-finish-load races). Kept until the view is destroyed: a reload
+ * (View > Reload) remounts the renderer and consumes again — a one-shot entry
+ * would strand the tab on "No file to open". */
+const openPathByWc = new Map<number, string>()
 /** File paths granted to each view — readFile only allows these */
 const allowedByWc = new Map<number, Set<string>>()
 /** Unsaved-changes flags mirrored from the renderer; drives the save prompt before closing a tab/window */
@@ -374,11 +383,7 @@ function registerPdfIpc(): void {
   if (ipcRegistered) return
   ipcRegistered = true
 
-  ipcMain.handle(PDF_CHANNELS.consumePending, (e) => {
-    const path = pendingByWc.get(e.sender.id) ?? null
-    pendingByWc.delete(e.sender.id)
-    return path
-  })
+  ipcMain.handle(PDF_CHANNELS.consumePending, (e) => openPathByWc.get(e.sender.id) ?? null)
 
   ipcMain.handle(PDF_CHANNELS.readFile, async (e, path: unknown) => {
     if (typeof path !== 'string' || !allowedByWc.get(e.sender.id)?.has(path)) {
@@ -399,11 +404,113 @@ function registerPdfIpc(): void {
       return { ok: false, error: 'pdf: target path not granted to this view' }
     }
     try {
-      await savePdfToPath(path, target, request)
-      return { ok: true }
+      const { skippedTextEdits, skippedTextInserts, skippedImageEdits } = await savePdfToPath(
+        path,
+        target,
+        request,
+      )
+      return {
+        ok: true,
+        ...(skippedTextEdits.length > 0 ? { skippedTextEdits } : {}),
+        ...(skippedTextInserts.length > 0 ? { skippedTextInserts } : {}),
+        ...(skippedImageEdits.length > 0 ? { skippedImageEdits } : {}),
+      }
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
+  })
+
+  ipcMain.handle(PDF_CHANNELS.listPageImages, async (e, path: unknown) => {
+    if (typeof path !== 'string' || !allowedByWc.get(e.sender.id)?.has(path)) {
+      throw new Error('pdf: path not granted to this view')
+    }
+    // Lazy import like the text-edit paths: pdfium wasm only loads when the feature is used
+    const { listPageImages } = await import('./image-edit')
+    return listPageImages(new Uint8Array(await readFile(path)))
+  })
+
+  ipcMain.handle(PDF_CHANNELS.listStaticFormFills, async (e, path: unknown) => {
+    if (typeof path !== 'string' || !allowedByWc.get(e.sender.id)?.has(path)) {
+      throw new Error('pdf: path not granted to this view')
+    }
+    return readStaticFormFills(new Uint8Array(await readFile(path)))
+  })
+
+  ipcMain.handle(
+    PDF_CHANNELS.pageImagePng,
+    async (
+      e,
+      request: {
+        path: string
+        pageIndex: number
+        rect: [number, number, number, number]
+        scale?: number
+      },
+    ) => {
+      const { path, pageIndex, rect, scale } = request ?? {}
+      if (
+        typeof path !== 'string' ||
+        !allowedByWc.get(e.sender.id)?.has(path) ||
+        typeof pageIndex !== 'number' ||
+        !Array.isArray(rect)
+      ) {
+        throw new Error('pdf: path not granted to this view')
+      }
+      const { renderImagePng } = await import('./image-edit')
+      return renderImagePng(
+        new Uint8Array(await readFile(path)),
+        pageIndex,
+        rect,
+        typeof scale === 'number' && Number.isFinite(scale) ? scale : 1,
+      )
+    },
+  )
+
+  ipcMain.handle(PDF_CHANNELS.pagePreviewPng, async (e, request: PagePreviewRequest) => {
+    const { path, pageIndex, excludeRects, excludeAnnots, clip, pxWidth, rotate } = request ?? {}
+    if (
+      typeof path !== 'string' ||
+      !allowedByWc.get(e.sender.id)?.has(path) ||
+      typeof pageIndex !== 'number' ||
+      !Array.isArray(excludeRects) ||
+      (excludeAnnots !== undefined && !Array.isArray(excludeAnnots)) ||
+      typeof clip !== 'object' ||
+      typeof pxWidth !== 'number' ||
+      typeof rotate !== 'number'
+    ) {
+      throw new Error('pdf: path not granted to this view')
+    }
+    const { renderPagePreviewPng } = await import('./image-edit')
+    return renderPagePreviewPng(new Uint8Array(await readFile(path)), {
+      pageIndex,
+      excludeRects,
+      excludeAnnots,
+      clip,
+      pxWidth,
+      rotate,
+    })
+  })
+
+  ipcMain.handle(
+    PDF_CHANNELS.validateTextEdits,
+    async (e, request: ValidateTextEditsRequest): Promise<TextEditValidation[]> => {
+      const { path, edits } = request ?? {}
+      if (
+        typeof path !== 'string' ||
+        !allowedByWc.get(e.sender.id)?.has(path) ||
+        !Array.isArray(edits)
+      ) {
+        throw new Error('pdf: path not granted to this view')
+      }
+      // Same lazy import as the save path: the pdfium wasm only loads when text editing is used
+      const { validateTextEdits } = await import('./text-edit')
+      return validateTextEdits(new Uint8Array(await readFile(path)), edits)
+    },
+  )
+
+  ipcMain.handle(PDF_CHANNELS.listEditFonts, async (): Promise<string[]> => {
+    const { listEditFonts } = await import('./text-edit')
+    return listEditFonts()
   })
 
   ipcMain.handle(
@@ -419,7 +526,7 @@ function registerPdfIpc(): void {
       }
       const win =
         BrowserWindow.fromWebContents(e.sender) ?? BrowserWindow.getFocusedWindow() ?? undefined
-      const picked = await dialog.showSaveDialog(win!, {
+      const picked = await showSaveDialogWithMemory(dialog, win, {
         title: tm('dlgExtract'),
         defaultPath: join(dirname(path), String(suggestedName || 'pages.pdf')),
         filters: [{ name: tm('filterPdf'), extensions: ['pdf'] }],
@@ -444,7 +551,7 @@ function registerPdfIpc(): void {
       }
       const win =
         BrowserWindow.fromWebContents(e.sender) ?? BrowserWindow.getFocusedWindow() ?? undefined
-      const picked = await dialog.showOpenDialog(win!, {
+      const picked = await showOpenDialogWithMemory(dialog, win, {
         title: tm('dlgInsert'),
         filters: [{ name: tm('filterPdf'), extensions: ['pdf'] }],
         properties: ['openFile'],
@@ -475,7 +582,7 @@ function registerPdfIpc(): void {
         return { ok: false, error: 'pdf: no images' }
       const win =
         BrowserWindow.fromWebContents(e.sender) ?? BrowserWindow.getFocusedWindow() ?? undefined
-      const picked = await dialog.showOpenDialog(win!, {
+      const picked = await showOpenDialogWithMemory(dialog, win, {
         title: tm('dlgExportImages'),
         properties: ['openDirectory', 'createDirectory'],
       })
@@ -490,6 +597,29 @@ function registerPdfIpc(): void {
         return { ok: true, savedDir: dir, count: images.length }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
+    },
+  )
+
+  // pdf-owned (unlike ai:image-search / ai:fetch-image, which the shell registers app-wide):
+  // slides' ai:generate-image is only registered once a slides view exists, so pdf needs its own
+  ipcMain.handle(
+    PDF_CHANNELS.generateImage,
+    async (_e, op: { prompt?: unknown; aspectRatio?: unknown }) => {
+      if (!hasGskAuth())
+        return {
+          error: 'Genspark account is not logged in on this machine; ask the user to log in first',
+        }
+      const prompt = String(op?.prompt ?? '').trim()
+      if (!prompt) return { error: 'prompt must not be empty' }
+      try {
+        const r = await gskGenerateImage({
+          prompt,
+          aspectRatio: op?.aspectRatio ? String(op.aspectRatio) : undefined,
+        })
+        return { url: r.url }
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : String(err) }
       }
     },
   )
@@ -519,7 +649,7 @@ function registerPdfIpc(): void {
 function grantAndTrack(wc: WebContents, openPath?: string | null): void {
   const wcId = wc.id
   if (openPath && existsSync(openPath)) {
-    pendingByWc.set(wcId, openPath)
+    openPathByWc.set(wcId, openPath)
     allowedByWc.set(wcId, new Set([openPath]))
   }
   // External links inside the PDF (Link annots with target=_blank) go to the system browser
@@ -529,7 +659,7 @@ function grantAndTrack(wc: WebContents, openPath?: string | null): void {
     return { action: 'deny' }
   })
   wc.once('destroyed', () => {
-    pendingByWc.delete(wcId)
+    openPathByWc.delete(wcId)
     allowedByWc.delete(wcId)
     dirtyByWc.delete(wcId)
     saveAsTargetByWc.delete(wcId)
