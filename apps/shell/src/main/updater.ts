@@ -310,6 +310,9 @@ const tUpd = createI18n({
     updDownloading: 'Đang tải bản cập nhật…',
     updFailed: 'Tải bản cập nhật không thành công. Kiểm tra mạng và thử lại.',
     updRetry: 'Thử lại',
+    updManual:
+      'Cập nhật tự động không thành công. Vui lòng tải phiên bản mới nhất từ trang tải xuống và cài đặt thủ công.',
+    updOpenDownload: 'Mở trang tải xuống',
   },
   'zh-TW': {
     updTitle: '軟體更新',

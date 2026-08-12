@@ -1973,6 +1973,9 @@ export const aiStrings = defineStrings({
     aiSummarizePrompt: 'Tóm tắt nội dung chính và ý chính của tài liệu này',
     aiPolishBtn: 'AI trau chuốt',
     aiPolishPrompt: 'Trau chuốt toàn bộ tài liệu để văn phong rõ ràng và mạch lạc hơn',
+    aiTidyBtn: 'AI định dạng',
+    aiTidyPrompt:
+      'Dọn dẹp định dạng của tài liệu — ví dụ sửa cấp độ tiêu đề, thống nhất định dạng danh sách, bỏ các chỗ in đậm và in nghiêng không cần thiết, và làm cho thụt lề đoạn văn nhất quán. Chỉ điều chỉnh định dạng — không thay đổi nội dung văn bản',
     aiSwitchModelTitle: 'Đổi mô hình AI',
     aiNewChatTitle: 'Trò chuyện mới',
     aiCollapseTitle: 'Thu gọn bảng',

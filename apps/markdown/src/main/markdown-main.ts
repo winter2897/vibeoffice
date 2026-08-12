@@ -254,6 +254,18 @@ const tDlg = createI18n({
     btnDontSave: 'न सहेजें',
     btnCancel: 'रद्द करें',
   },
+  vi: {
+    dlgSaveTitle: 'Lưu tài liệu Markdown',
+    filterMarkdown: 'Tài liệu Markdown',
+    dlgPickImage: 'Chọn hình ảnh',
+    filterImages: 'Hình ảnh',
+    untitledFile: 'Chưa đặt tên',
+    closeUnsavedMsg: 'Tài liệu này có thay đổi chưa được lưu.',
+    closeUnsavedDetail: 'Bạn có muốn lưu trước khi đóng không?',
+    btnSave: 'Lưu',
+    btnDontSave: 'Không lưu',
+    btnCancel: 'Hủy',
+  },
   'zh-TW': {
     dlgSaveTitle: '儲存 Markdown 文件',
     filterMarkdown: 'Markdown 文件',
