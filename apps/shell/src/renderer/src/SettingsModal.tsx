@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
+import { AI_PROVIDERS } from '@genoffice/ai-provider'
+import type { AiProviderId, AiSettings } from '@genoffice/ai-provider'
 import { useI18n } from './locale'
 import type { StringKey } from './locale'
 import type { AccountStatus, UiTheme } from '../../shared/home-api'
 import './settings.css'
 
 // ── Settings modal (opened from the account menu) ─────────
-// Genspark-style two-pane dialog: section nav on the left, fields on the right.
+// Aide-style two-pane dialog: section nav on the left, fields on the right.
 // All values go through the existing home IPC; nothing is stored locally.
 
 // sorted by ISO 639 language code — native-script labels have no natural
@@ -46,11 +48,12 @@ const CHANNEL_OPTIONS = [
   { value: 'beta', labelKey: 'channelBeta' },
 ] as const satisfies readonly { value: 'stable' | 'beta'; labelKey: StringKey }[]
 
-type SectionId = 'account' | 'general' | 'about'
+type SectionId = 'account' | 'general' | 'ai' | 'about'
 
 const SECTIONS: readonly { id: SectionId; labelKey: StringKey }[] = [
   { id: 'account', labelKey: 'setSecAccount' },
   { id: 'general', labelKey: 'setSecGeneral' },
+  { id: 'ai', labelKey: 'setSecAi' },
   { id: 'about', labelKey: 'setSecAbout' },
 ]
 
@@ -82,6 +85,24 @@ function SectionIcon({ id }: { id: SectionId }) {
       </svg>
     )
   }
+  if (id === 'ai') {
+    return (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path
+          d="M6 2.2 7 5l2.8 1-2.8 1-1 2.8-1-2.8L2.2 6 5 5z"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M11.6 8.4l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinejoin="round"
+        />
+      </svg>
+    )
+  }
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <circle cx="8" cy="8" r="6.3" stroke="currentColor" strokeWidth="1.3" />
@@ -89,6 +110,60 @@ function SectionIcon({ id }: { id: SectionId }) {
       <circle cx="8" cy="5.1" r="0.8" fill="currentColor" />
     </svg>
   )
+}
+
+/** label + free-text/password input row; the first editable field in this dialog */
+function InputField({
+  id,
+  label,
+  value,
+  placeholder,
+  secret,
+  onChange,
+  onCommit,
+}: {
+  id: string
+  label: string
+  value: string
+  placeholder?: string
+  secret?: boolean
+  onChange: (next: string) => void
+  /** persist point — fires on blur, not on every keystroke */
+  onCommit: () => void
+}) {
+  return (
+    <div className="set-field">
+      <div className="set-field-text">
+        <label className="set-field-label" htmlFor={id}>
+          {label}
+        </label>
+      </div>
+      <input
+        id={id}
+        className="set-input"
+        type={secret ? 'password' : 'text'}
+        value={value}
+        placeholder={placeholder}
+        spellCheck={false}
+        autoComplete="off"
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onCommit}
+      />
+    </div>
+  )
+}
+
+/**
+ * Provider names are brands (Claude, Gemini, OpenRouter…) and stay as written.
+ * The bundled one is the exception: "Built-in" is a plain word, so it follows
+ * the UI language like the rest of the dialog.
+ */
+function aiProviderLabel(
+  id: AiProviderId | undefined,
+  fallback: string,
+  t: (key: StringKey) => string,
+): string {
+  return id === 'genspark' ? t('setAiBuiltIn') : fallback
 }
 
 /** label-over-value field row with an optional right-aligned action */
@@ -127,7 +202,7 @@ export interface SettingsModalProps {
   onOpenLoginUrl: () => void
   onCopyLoginUrl: () => void
   onClose: () => void
-  /** closes the modal and launches the Genspark login flow (progress shows on the account entry) */
+  /** closes the modal and launches the Aide login flow (progress shows on the account entry) */
   onLogin: () => void
   onLogout: () => void
 }
@@ -150,9 +225,13 @@ export function SettingsModal({
   const [saveDir, setSaveDir] = useState('')
   const [channel, setChannel] = useState<'stable' | 'beta'>('stable')
   const [appVersion, setAppVersion] = useState('')
+  const [ai, setAi] = useState<AiSettings | null>(null)
 
   useEffect(() => {
     let alive = true
+    void window.aiOffice.getAiSettings?.().then((s) => {
+      if (alive && s) setAi(s)
+    })
     void window.aiOffice.getTheme?.().then((th) => {
       if (alive) setTheme(th)
     })
@@ -190,6 +269,27 @@ export function SettingsModal({
       if (dir) setSaveDir(dir)
     })
   }
+
+  // Typing writes local state only; the file write happens on blur (and at once
+  // for the provider dropdown), so an API key is not persisted keystroke by keystroke.
+  const persistAi = (next: AiSettings) => {
+    setAi(next)
+    void window.aiOffice.setAiSettings?.(next)
+  }
+
+  const editAiField = (key: 'apiKey' | 'model' | 'baseUrl', value: string) => {
+    if (!ai) return
+    setAi({
+      ...ai,
+      providers: {
+        ...ai.providers,
+        [ai.provider]: { ...ai.providers[ai.provider], [key]: value },
+      },
+    })
+  }
+
+  const aiMeta = ai ? AI_PROVIDERS.find((p) => p.id === ai.provider) : undefined
+  const aiConfig = ai ? ai.providers[ai.provider] : undefined
 
   const loggedIn = status?.loggedIn ?? false
   const email = status?.email ?? ''
@@ -271,7 +371,7 @@ export function SettingsModal({
                         </>
                       )}
                       <button className="set-btn primary" onClick={onLogin}>
-                        {loginWaiting ? t('waitingShort') : t('loginGenspark')}
+                        {loginWaiting ? t('waitingShort') : t('loginAide')}
                       </button>
                     </>
                   )}
@@ -339,6 +439,113 @@ export function SettingsModal({
                     </button>
                   }
                 />
+              </>
+            )}
+            {section === 'ai' && (
+              <>
+                <h3 className="set-pane-title">{t('setSecAi')}</h3>
+                {!(ai && aiConfig) && <p className="set-note">{t('setAiUnavailable')}</p>}
+              </>
+            )}
+            {section === 'ai' && ai && aiConfig && (
+              <>
+                <div className="set-field">
+                  <div className="set-field-text">
+                    <label className="set-field-label" htmlFor="set-ai-provider">
+                      {t('setAiProvider')}
+                    </label>
+                  </div>
+                  <span className="set-select-wrap">
+                    <span className="set-select-text" aria-hidden="true">
+                      {aiProviderLabel(aiMeta?.id, aiMeta?.label ?? ai.provider, t)}
+                    </span>
+                    <select
+                      id="set-ai-provider"
+                      className="set-select"
+                      value={ai.provider}
+                      onChange={(e) =>
+                        persistAi({ ...ai, provider: e.target.value as AiProviderId })
+                      }
+                    >
+                      {AI_PROVIDERS.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {aiProviderLabel(p.id, p.label, t)}
+                        </option>
+                      ))}
+                    </select>
+                  </span>
+                </div>
+                {/* the built-in Aide provider authenticates through the account
+                    sign-in, so it exposes no key or model fields */}
+                {ai.provider !== 'genspark' && (
+                  <>
+                    <InputField
+                      id="set-ai-key"
+                      label={t('setAiApiKey')}
+                      value={aiConfig.apiKey}
+                      placeholder={aiMeta?.keyPlaceholder}
+                      secret
+                      onChange={(v) => editAiField('apiKey', v)}
+                      onCommit={() => persistAi(ai)}
+                    />
+                    {aiMeta?.needsBaseUrl && (
+                      <InputField
+                        id="set-ai-base-url"
+                        label={t('setAiBaseUrl')}
+                        value={aiConfig.baseUrl ?? ''}
+                        placeholder="https://api.example.com/v1"
+                        onChange={(v) => editAiField('baseUrl', v)}
+                        onCommit={() => persistAi(ai)}
+                      />
+                    )}
+                    {aiMeta && aiMeta.models.length > 0 ? (
+                      <div className="set-field">
+                        <div className="set-field-text">
+                          <label className="set-field-label" htmlFor="set-ai-model">
+                            {t('setAiModel')}
+                          </label>
+                        </div>
+                        <span className="set-select-wrap">
+                          <span className="set-select-text" aria-hidden="true">
+                            {aiConfig.model || '—'}
+                          </span>
+                          <select
+                            id="set-ai-model"
+                            className="set-select"
+                            value={aiConfig.model}
+                            onChange={(e) =>
+                              persistAi({
+                                ...ai,
+                                providers: {
+                                  ...ai.providers,
+                                  [ai.provider]: { ...aiConfig, model: e.target.value },
+                                },
+                              })
+                            }
+                          >
+                            {aiMeta.models.map((m) => (
+                              <option key={m} value={m}>
+                                {m}
+                              </option>
+                            ))}
+                          </select>
+                        </span>
+                      </div>
+                    ) : (
+                      // open-ended catalogs (OpenRouter, custom endpoints): ids
+                      // change too often for a fixed list, so the model is typed
+                      <InputField
+                        id="set-ai-model"
+                        label={t('setAiModel')}
+                        value={aiConfig.model}
+                        placeholder={aiMeta?.defaultModel}
+                        onChange={(v) => editAiField('model', v)}
+                        onCommit={() => persistAi(ai)}
+                      />
+                    )}
+                    <p className="set-note">{t('setAiHint')}</p>
+                  </>
+                )}
               </>
             )}
             {section === 'about' && (

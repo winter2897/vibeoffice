@@ -1,6 +1,10 @@
 import { aiFetch } from './fetch'
 import { httpBodyDetail } from './http-error'
-import { GENSPARK_LLM_BASE_URLS, gensparkAttributionHeaders } from './providers'
+import {
+  GENSPARK_LLM_BASE_URLS,
+  OPENAI_COMPATIBLE_BASE_URLS,
+  gensparkAttributionHeaders,
+} from './providers'
 import type { AiChatResponse, AiProviderConfig, AiProviderId } from './types'
 import { AI_CHAT_RESPONSE_TIMEOUT_MS, createStreamWatchdog, type StreamWatchdog } from './watchdog'
 
@@ -116,11 +120,6 @@ async function chatOpenAiCompatible(
   return { ok: true, content }
 }
 
-const OPENAI_COMPATIBLE_BASE_URLS: Partial<Record<AiProviderId, string>> = {
-  deepseek: 'https://api.deepseek.com/v1',
-  openai: 'https://api.openai.com/v1',
-}
-
 /** route a one-shot (non-streaming, non-tool-calling) chat call by provider id */
 export async function chatForProvider(
   provider: AiProviderId,
@@ -148,6 +147,7 @@ export async function chatForProvider(
         return chatGemini(wd, config, system, user)
       case 'deepseek':
       case 'openai':
+      case 'openrouter':
         return chatOpenAiCompatible(
           wd,
           OPENAI_COMPATIBLE_BASE_URLS[provider]!,

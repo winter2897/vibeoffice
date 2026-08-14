@@ -1,9 +1,13 @@
 /// The default folder where new/untitled files land on their first (silent)
 /// save and where AI-generated drafts go. Historically hardcoded to
-/// <Documents>/GenOffice; now user-configurable via the `defaultSaveDir` key
+/// a folder named after the product; now user-configurable via the `defaultSaveDir` key
 /// in userData/app-settings.json (set from the home screen's account menu).
 /// Every editor main module resolves through here so they all honor the same
 /// setting.
+///
+/// The fallback follows the product name. Nothing is moved on rename: files
+/// already saved under the old name stay where they are and keep opening from
+/// Recents; only new untitled saves land in the new folder.
 import { accessSync, constants, mkdirSync, readFileSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 
@@ -52,6 +56,6 @@ export function resolveDefaultSaveDir(configured: string | null, fallbackDir: st
 /** convenience for the Electron mains: settings lookup + fallback in one call */
 export function configuredDefaultSaveDir(app: PathProvider): string {
   const settingsPath = join(app.getPath('userData'), 'app-settings.json')
-  const fallback = join(app.getPath('documents'), 'GenOffice')
+  const fallback = join(app.getPath('documents'), 'VibeOffice')
   return resolveDefaultSaveDir(readDefaultSaveDirSetting(settingsPath), fallback)
 }

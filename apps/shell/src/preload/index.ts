@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { IpcRendererEvent } from 'electron'
 import type {
+  AiSettings,
   AccountLoginEvent,
   AccountStatus,
   CloudProjectsSnapshot,
@@ -13,7 +14,7 @@ import type {
   TimelineEntryItem,
   UiLanguage,
 } from '../shared/home-api'
-import { HOME_CHANNELS, PROJECT_CHANNELS } from '../shared/home-api'
+import { AI_SETTINGS_CHANNELS, HOME_CHANNELS, PROJECT_CHANNELS } from '../shared/home-api'
 import type { TabsApi, TabSummary } from '../shared/tabs-api'
 import { TABS_CHANNELS } from '../shared/tabs-api'
 
@@ -188,6 +189,13 @@ const homeApi: HomeApi = {
   },
   async openCreditUsage() {
     await ipcRenderer.invoke(HOME_CHANNELS.openCreditUsage)
+  },
+  async getAiSettings() {
+    const result: unknown = await ipcRenderer.invoke(AI_SETTINGS_CHANNELS.get)
+    return result as AiSettings
+  },
+  async setAiSettings(settings) {
+    await ipcRenderer.invoke(AI_SETTINGS_CHANNELS.set, settings)
   },
   async cloudProjectsCached() {
     const result: unknown = await ipcRenderer.invoke(HOME_CHANNELS.cloudProjectsCached)

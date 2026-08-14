@@ -649,6 +649,26 @@ describe('streamForProvider: openai-compatible', () => {
     )
   })
 
+  it('routes openrouter to its endpoint with a bearer key and no billing header', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(okResponse(sseStream(['data: [DONE]'])))
+    vi.stubGlobal('fetch', fetchMock)
+    const { cb } = collector()
+    await streamForProvider(
+      'openrouter',
+      { apiKey: 'sk-or-v1-key', model: 'anthropic/claude-sonnet-4.5' },
+      'sys',
+      [],
+      [],
+      100,
+      cb,
+    ).catch(() => {})
+    const [url, init] = fetchMock.mock.calls[0]! as [string, { headers: Record<string, string> }]
+    expect(url).toBe('https://openrouter.ai/api/v1/chat/completions')
+    expect(init.headers.Authorization).toBe('Bearer sk-or-v1-key')
+    // the Aide billing-attribution header must never reach a third-party endpoint
+    expect(init.headers['X-Agent-Type']).toBeUndefined()
+  })
+
   it('uses the configured base URL for the custom provider', async () => {
     const fetchMock = vi.fn().mockResolvedValue(okResponse(sseStream(['data: [DONE]'])))
     vi.stubGlobal('fetch', fetchMock)

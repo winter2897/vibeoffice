@@ -217,6 +217,38 @@
   background: var(--surface);
 }
 
+/* editable counterpart to .set-select-wrap: same right-aligned slot, but a real
+   text box, so an API key or model id can be typed and read back */
+.set-input {
+  flex-shrink: 0;
+  width: 260px;
+  max-width: 55%;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.set-input::placeholder {
+  color: var(--text-muted);
+}
+
+.set-input:focus {
+  border-color: var(--border-hover);
+  outline: none;
+}
+
+.set-note {
+  margin: 10px 2px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
 .set-btn {
   flex-shrink: 0;
   display: inline-flex;

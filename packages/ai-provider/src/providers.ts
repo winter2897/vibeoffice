@@ -1,7 +1,7 @@
 import type { AiProviderId, AiProviderMeta, AiSettings, LegacyAiSettings } from './types'
 
 /**
- * Genspark server-side LLM proxy endpoints. All three protocols share the
+ * Aide server-side LLM proxy endpoints. All three protocols share the
  * api_key from the gsk login; model ids follow the proxy's own naming scheme,
  * which differs from the official vendor ids.
  */
@@ -12,9 +12,9 @@ export const GENSPARK_LLM_BASE_URLS = {
 } as const
 
 /**
- * Splits GenOffice usage out of the proxy's default "Claw" billing bucket
+ * Splits VibeOffice usage out of the proxy's default "Claw" billing bucket
  * (the backend attributes gsk-key traffic by X-Agent-Type). Only sent to the
- * Genspark proxy — never to direct vendor APIs.
+ * Aide proxy — never to direct vendor APIs.
  */
 export const GENSPARK_AGENT_TYPE = 'genoffice'
 
@@ -24,10 +24,24 @@ export function gensparkAttributionHeaders(baseUrl?: string): Record<string, str
     : {}
 }
 
+/**
+ * Providers that speak the OpenAI /chat/completions protocol at a fixed
+ * endpoint. `custom` is absent on purpose — it carries its own baseUrl.
+ * Shared by both the streaming and one-shot routers so the two cannot drift.
+ */
+export const OPENAI_COMPATIBLE_BASE_URLS: Partial<Record<AiProviderId, string>> = {
+  deepseek: 'https://api.deepseek.com/v1',
+  openai: 'https://api.openai.com/v1',
+  openrouter: 'https://openrouter.ai/api/v1',
+}
+
 export const AI_PROVIDERS: AiProviderMeta[] = [
   {
     id: 'genspark',
-    label: 'Genspark',
+    // the bundled provider, billed through the signed-in account. Named for what
+    // it is, not for the assistant (Aide) or the backend vendor behind it — the
+    // settings dialog localizes this one label.
+    label: 'Built-in',
     models: [
       'claude-opus-4-7',
       'claude-opus-4-8',
@@ -38,7 +52,7 @@ export const AI_PROVIDERS: AiProviderMeta[] = [
       'gemini-3-flash-preview',
     ],
     defaultModel: 'claude-opus-4-7',
-    keyPlaceholder: 'Not required - sign in to Genspark',
+    keyPlaceholder: 'Not required - sign in from the Account tab',
   },
   {
     id: 'anthropic',
@@ -78,6 +92,16 @@ export const AI_PROVIDERS: AiProviderMeta[] = [
     keyPlaceholder: 'sk-...',
   },
   {
+    // OpenRouter fronts every vendor behind one OpenAI-compatible endpoint, so
+    // the model list is open-ended: ids are `vendor/model` and change weekly.
+    // The settings UI takes a free-text model instead of a fixed dropdown.
+    id: 'openrouter',
+    label: 'OpenRouter',
+    models: [],
+    defaultModel: 'anthropic/claude-sonnet-4.5',
+    keyPlaceholder: 'sk-or-v1-...',
+  },
+  {
     id: 'custom',
     label: 'Custom',
     models: [],
@@ -107,11 +131,20 @@ export function defaultAiSettings(
   return { provider: 'genspark', providers }
 }
 
+export function isAiProviderId(value: unknown): value is AiProviderId {
+  return AI_PROVIDERS.some((meta) => meta.id === value)
+}
+
 /**
  * Merge on-disk settings over freshly computed defaults, migrating the
  * pre-provider shape (a single OpenAI-compatible endpoint) into the
  * "custom" provider slot. `stored` is whatever the caller read from its
  * settings file (already JSON-parsed); this function does no file I/O.
+ *
+ * A stored `provider` naming an id this build does not ship (an older or
+ * newer release, e.g. "claude-cli") falls back to the default: keeping it
+ * would leave `providers[provider]` undefined, which blanks the settings
+ * pane and makes streaming throw "Unknown provider".
  */
 export function resolveAiSettings(
   stored: Partial<AiSettings> & LegacyAiSettings,
@@ -128,7 +161,7 @@ export function resolveAiSettings(
     return defaults
   }
   return {
-    provider: stored.provider ?? defaults.provider,
+    provider: isAiProviderId(stored.provider) ? stored.provider : defaults.provider,
     providers: { ...defaults.providers, ...stored.providers },
   }
 }

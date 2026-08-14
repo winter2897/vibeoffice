@@ -26,6 +26,27 @@ describe('resolveAiSettings', () => {
     expect(resolveAiSettings({}, defaults)).toEqual(defaults)
   })
 
+  it('falls back to the default when the stored provider is not a shipped id', () => {
+    const defaults = defaultAiSettings()
+    // written by a build that shipped a provider this one does not have
+    const resolved = resolveAiSettings(
+      { provider: 'claude-cli' as never, providers: defaults.providers },
+      defaults,
+    )
+    expect(resolved.provider).toBe('genspark')
+    // the selected provider must always have a config; an unknown id leaves it undefined
+    expect(resolved.providers[resolved.provider]).toBeDefined()
+  })
+
+  it('keeps a stored provider that this build does ship', () => {
+    const defaults = defaultAiSettings()
+    const resolved = resolveAiSettings(
+      { provider: 'openrouter', providers: defaults.providers },
+      defaults,
+    )
+    expect(resolved.provider).toBe('openrouter')
+  })
+
   it('migrates the pre-provider single-endpoint shape into the custom provider', () => {
     const defaults = defaultAiSettings()
     const resolved = resolveAiSettings(
@@ -58,7 +79,10 @@ describe('resolveAiSettings', () => {
       defaults,
     )
     expect(resolved.provider).toBe('gemini')
-    expect(resolved.providers.gemini).toEqual({ apiKey: 'stored-gemini-key', model: 'gemini-2.5-pro' })
+    expect(resolved.providers.gemini).toEqual({
+      apiKey: 'stored-gemini-key',
+      model: 'gemini-2.5-pro',
+    })
     // provider not mentioned in stored.providers keeps the computed default
     expect(resolved.providers.anthropic.apiKey).toBe('preset-key')
   })

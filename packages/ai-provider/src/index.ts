@@ -13,7 +13,9 @@ export type {
 export {
   AI_PROVIDERS,
   GENSPARK_LLM_BASE_URLS,
+  OPENAI_COMPATIBLE_BASE_URLS,
   defaultAiSettings,
+  isAiProviderId,
   resolveAiSettings,
 } from './providers'
 export { chatForProvider } from './chat'

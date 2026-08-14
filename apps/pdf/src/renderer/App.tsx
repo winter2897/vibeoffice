@@ -16,7 +16,7 @@ import {
 } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
-import { AiPanel, GensparkMark } from './ai/AiPanel'
+import { AiPanel, AideMark } from './ai/AiPanel'
 import type { PdfAiDeps } from './ai/tools'
 import {
   MARKUP_COLORS,
@@ -5106,7 +5106,7 @@ export default function App() {
         <div className="ribbon-body">
           {ribbonTab === 'home' && (
             <>
-              {/* ---- Genspark AI (first slot: entry + one-click AI actions, docs parity) ---- */}
+              {/* ---- Aide (first slot: entry + one-click AI actions, docs parity) ---- */}
               <div className="ribbon-group">
                 <div className="ribbon-group-items">
                   <button
@@ -5115,9 +5115,9 @@ export default function App() {
                     onClick={() => setAiCollapsed((v) => !v)}
                   >
                     <span className="rb-big-icon">
-                      <GensparkMark size={26} />
+                      <AideMark size={26} />
                     </span>
-                    <span>Genspark AI</span>
+                    <span>Aide</span>
                   </button>
                   <button
                     className="rb-big ai-entry"
@@ -5571,7 +5571,7 @@ export default function App() {
               aria-label={t('aiOpenAssistant')}
               onClick={() => setAiCollapsed(false)}
             >
-              <GensparkMark size={22} />
+              <AideMark size={22} />
             </button>
           )}
           <AiPanel api={aiApi} preset={aiPreset} onCollapse={() => setAiCollapsed(true)} />
